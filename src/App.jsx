@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { 
   DndContext, 
   closestCenter,
@@ -22,15 +22,151 @@ import {
   CheckCircle2, 
   Trash2,
   GripVertical,
-  Calendar,
   Flame,
   ChevronDown,
-  Check
+  Check,
+  Play,
+  Pause,
+  RotateCcw,
+  Coffee,
+  Target
 } from 'lucide-react'
 
 const API_URL = 'https://taskflow-1-ji7r.onrender.com/api'
 
-function TaskCard({ task, onStatusChange, onDelete, onPriorityChange }) {
+const POMODORO_STATES = {
+  work: { label: 'Focus', duration: 25 * 60, color: 'text-rose-400', bg: 'bg-rose-500' },
+  shortBreak: { label: 'Short Break', duration: 5 * 60, color: 'text-emerald-400', bg: 'bg-emerald-500' },
+  longBreak: { label: 'Long Break', duration: 15 * 60, color: 'text-blue-400', bg: 'bg-blue-500' },
+}
+
+function PomodoroTimer({ activeTask, onComplete }) {
+  const [mode, setMode] = useState('work')
+  const [timeLeft, setTimeLeft] = useState(POMODORO_STATES.work.duration)
+  const [isRunning, setIsRunning] = useState(false)
+  const [sessions, setSessions] = useState(0)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const intervalRef = useRef(null)
+  
+  const currentState = POMODORO_STATES[mode]
+  const minutes = Math.floor(timeLeft / 60)
+  const seconds = timeLeft % 60
+  
+  useEffect(() => {
+    if (isRunning && timeLeft > 0) {
+      intervalRef.current = setInterval(() => {
+        setTimeLeft(prev => prev - 1)
+      }, 1000)
+    } else if (timeLeft === 0) {
+      setIsRunning(false)
+      handleComplete()
+    }
+    
+    return () => clearInterval(intervalRef.current)
+  }, [isRunning, timeLeft])
+  
+  const handleComplete = () => {
+    if (mode === 'work') {
+      const newSessions = sessions + 1
+      setSessions(newSessions)
+      
+      if (newSessions % 4 === 0) {
+        setMode('longBreak')
+        setTimeLeft(POMODORO_STATES.longBreak.duration)
+      } else {
+        setMode('shortBreak')
+        setTimeLeft(POMODORO_STATES.shortBreak.duration)
+      }
+      
+      if (activeTask) {
+        onComplete(activeTask)
+      }
+    } else {
+      setMode('work')
+      setTimeLeft(POMODORO_STATES.work.duration)
+    }
+  }
+  
+  const toggleTimer = () => setIsRunning(!isRunning)
+  
+  const resetTimer = () => {
+    setIsRunning(false)
+    setTimeLeft(currentState.duration)
+  }
+  
+  const switchMode = (newMode) => {
+    setMode(newMode)
+    setTimeLeft(POMODORO_STATES[newMode].duration)
+    setIsRunning(false)
+  }
+  
+  return (
+    <div className="mb-6 rounded-xl bg-zinc-900/50 border border-zinc-800 overflow-hidden">
+      <button 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full p-3 flex items-center justify-between hover:bg-zinc-800/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className={`w-2 h-2 rounded-full ${currentState.bg} ${isRunning ? 'animate-pulse' : ''}`}></div>
+          <span className="text-zinc-400 text-sm font-mono">
+            {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+          </span>
+          <span className={`text-xs ${currentState.color}`}>{currentState.label}</span>
+        </div>
+        <ChevronDown size={16} className={`text-zinc-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+      </button>
+      
+      {isExpanded && (
+        <div className="p-4 border-t border-zinc-800">
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <button 
+              onClick={toggleTimer}
+              className={`p-3 rounded-full ${currentState.bg} text-white hover:opacity-90 transition-opacity`}
+            >
+              {isRunning ? <Pause size={20} /> : <Play size={20} />}
+            </button>
+            <button 
+              onClick={resetTimer}
+              className="p-3 rounded-full bg-zinc-800 text-zinc-400 hover:bg-zinc-700 transition-colors"
+            >
+              <RotateCcw size={20} />
+            </button>
+          </div>
+          
+          <div className="flex justify-center gap-2 mb-4">
+            {Object.entries(POMODORO_STATES).map(([key, value]) => (
+              <button
+                key={key}
+                onClick={() => switchMode(key)}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  mode === key 
+                    ? `${value.bg} text-white` 
+                    : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
+                }`}
+              >
+                {value.label}
+              </button>
+            ))}
+          </div>
+          
+          <div className="flex justify-center items-center gap-2 text-sm">
+            <Coffee size={14} className="text-zinc-600" />
+            <span className="text-zinc-500">{sessions} sessions today</span>
+          </div>
+          
+          {activeTask && (
+            <div className="mt-3 text-center">
+              <span className="text-xs text-zinc-600">Working on: </span>
+              <span className="text-xs text-zinc-400 truncate">{activeTask.title}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TaskCard({ task, onStatusChange, onDelete, onPriorityChange, onSelect, isSelected }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task._id })
   
   const style = {
@@ -64,23 +200,25 @@ function TaskCard({ task, onStatusChange, onDelete, onPriorityChange }) {
     <div 
       ref={setNodeRef}
       style={style}
+      onClick={() => onSelect(task)}
       className={`
-        flex items-center gap-3 p-3 rounded-lg bg-zinc-900/50 border border-zinc-800
-        transition-all duration-200
-        ${isDragging ? 'opacity-50 scale-[0.98] shadow-xl' : 'hover:border-zinc-700'}
+        flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 cursor-pointer
+        ${isDragging ? 'opacity-50 scale-[0.98] shadow-xl' : ''}
+        ${isSelected ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'}
         ${task.status === 'done' ? 'opacity-60' : ''}
       `}
     >
       <button 
         {...attributes} 
         {...listeners}
+        onClick={(e) => e.stopPropagation()}
         className="text-zinc-700 hover:text-zinc-500 cursor-grab active:cursor-grabbing"
       >
         <GripVertical size={16} />
       </button>
       
       <button 
-        onClick={() => onStatusChange(task._id, nextStatus[task.status])}
+        onClick={(e) => { e.stopPropagation(); onStatusChange(task._id, nextStatus[task.status]) }}
         className="hover:scale-110 transition-transform"
       >
         {statusIcons[task.status]}
@@ -106,7 +244,7 @@ function TaskCard({ task, onStatusChange, onDelete, onPriorityChange }) {
       
       <div className="relative">
         <button 
-          onClick={() => setMenuOpen(!menuOpen)}
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen) }}
           className="p-1.5 text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800 rounded transition-colors"
         >
           <ChevronDown size={16} />
@@ -120,7 +258,7 @@ function TaskCard({ task, onStatusChange, onDelete, onPriorityChange }) {
               {['low', 'medium', 'high'].map(p => (
                 <button
                   key={p}
-                  onClick={() => { onPriorityChange(task._id, p); setMenuOpen(false) }}
+                  onClick={(e) => { e.stopPropagation(); onPriorityChange(task._id, p); setMenuOpen(false) }}
                   className={`w-full px-3 py-1.5 text-sm text-left hover:bg-zinc-700 flex items-center justify-between ${task.priority === p ? 'text-white' : 'text-zinc-400'}`}
                 >
                   <span className="capitalize">{p}</span>
@@ -129,7 +267,7 @@ function TaskCard({ task, onStatusChange, onDelete, onPriorityChange }) {
               ))}
               <div className="border-t border-zinc-700 my-1"></div>
               <button
-                onClick={() => { onDelete(task._id); setMenuOpen(false) }}
+                onClick={(e) => { e.stopPropagation(); onDelete(task._id); setMenuOpen(false) }}
                 className="w-full px-3 py-1.5 text-sm text-left text-rose-400 hover:bg-zinc-700"
               >
                 Delete
@@ -181,7 +319,7 @@ function AddTaskForm({ onAdd }) {
   )
 }
 
-function TaskList({ tasks, onStatusChange, onDelete, onPriorityChange, emptyMessage }) {
+function TaskList({ tasks, onStatusChange, onDelete, onPriorityChange, onSelect, selectedTask, emptyMessage }) {
   const pendingTasks = tasks.filter(t => t.status === 'pending')
   const inProgressTasks = tasks.filter(t => t.status === 'inProgress')
   const doneTasks = tasks.filter(t => t.status === 'done')
@@ -211,6 +349,8 @@ function TaskList({ tasks, onStatusChange, onDelete, onPriorityChange, emptyMess
                   onStatusChange={onStatusChange}
                   onDelete={onDelete}
                   onPriorityChange={onPriorityChange}
+                  onSelect={onSelect}
+                  isSelected={selectedTask?._id === task._id}
                 />
               ))}
             </div>
@@ -233,6 +373,8 @@ function TaskList({ tasks, onStatusChange, onDelete, onPriorityChange, emptyMess
                   onStatusChange={onStatusChange}
                   onDelete={onDelete}
                   onPriorityChange={onPriorityChange}
+                  onSelect={onSelect}
+                  isSelected={selectedTask?._id === task._id}
                 />
               ))}
             </div>
@@ -255,6 +397,8 @@ function TaskList({ tasks, onStatusChange, onDelete, onPriorityChange, emptyMess
                   onStatusChange={onStatusChange}
                   onDelete={onDelete}
                   onPriorityChange={onPriorityChange}
+                  onSelect={onSelect}
+                  isSelected={selectedTask?._id === task._id}
                 />
               ))}
             </div>
@@ -269,6 +413,7 @@ function App() {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [selectedTask, setSelectedTask] = useState(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -338,6 +483,7 @@ function App() {
     try {
       await fetch(`${API_URL}/tasks/${taskId}`, { method: 'DELETE' })
       setTasks(prev => prev.filter(t => t._id !== taskId))
+      if (selectedTask?._id === taskId) setSelectedTask(null)
     } catch (err) {
       console.error(err)
     }
@@ -365,6 +511,12 @@ function App() {
     }
   }
   
+  const handlePomodoroComplete = async (task) => {
+    if (task.status === 'pending') {
+      await updateTaskStatus(task._id, 'inProgress')
+    }
+  }
+  
   const pendingCount = tasks.filter(t => t.status === 'pending').length
   const doneCount = tasks.filter(t => t.status === 'done').length
   
@@ -380,7 +532,6 @@ function App() {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-8">
         <p className="text-rose-500 mb-4">{error}</p>
-        <p className="text-zinc-600 text-sm mb-4">Run: cd server && npm start</p>
         <button onClick={fetchTasks} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded text-sm">
           Retry
         </button>
@@ -391,12 +542,17 @@ function App() {
   return (
     <div className="min-h-screen bg-zinc-950">
       <div className="max-w-lg mx-auto px-4 py-8">
-        <header className="mb-8">
+        <header className="mb-6">
           <h1 className="text-2xl font-semibold text-zinc-100">Tasks</h1>
           <p className="text-sm text-zinc-500 mt-1">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </header>
+        
+        <PomodoroTimer 
+          activeTask={selectedTask} 
+          onComplete={handlePomodoroComplete} 
+        />
         
         <div className="flex gap-6 mb-4 text-sm">
           <span className="text-zinc-400">{pendingCount} pending</span>
@@ -416,6 +572,8 @@ function App() {
             onStatusChange={updateTaskStatus}
             onDelete={deleteTask}
             onPriorityChange={updateTaskPriority}
+            onSelect={setSelectedTask}
+            selectedTask={selectedTask}
             emptyMessage="No tasks yet. Add one above."
           />
         </DndContext>
