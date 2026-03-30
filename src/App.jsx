@@ -28,7 +28,7 @@ import {
   Check
 } from 'lucide-react'
 
-const API_URL = 'http://localhost:3001/api'
+const API_URL = 'https://taskflow-1-ji7r.onrender.com/api'
 
 function TaskCard({ task, onStatusChange, onDelete, onPriorityChange }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task._id })
