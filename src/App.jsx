@@ -29,28 +29,23 @@ import {
   Pause,
   RotateCcw,
   Coffee,
-  Target
+  X,
+  BarChart3,
+  Calendar,
+  Timer,
+  Target,
+  Sun,
+  Moon
 } from 'lucide-react'
 
 const API_URL = 'https://taskflow-1-ji7r.onrender.com/api'
 
-const POMODORO_STATES = {
-  work: { label: 'Focus', duration: 25 * 60, color: 'text-rose-400', bg: 'bg-rose-500' },
-  shortBreak: { label: 'Short Break', duration: 5 * 60, color: 'text-emerald-400', bg: 'bg-emerald-500' },
-  longBreak: { label: 'Long Break', duration: 15 * 60, color: 'text-blue-400', bg: 'bg-blue-500' },
-}
-
-function PomodoroTimer({ activeTask, onComplete }) {
-  const [mode, setMode] = useState('work')
-  const [timeLeft, setTimeLeft] = useState(POMODORO_STATES.work.duration)
+function TimerModal({ isOpen, onClose, onSave, initialDuration = 25 }) {
+  const [minutes, setMinutes] = useState(initialDuration)
+  const [timeLeft, setTimeLeft] = useState(initialDuration * 60)
   const [isRunning, setIsRunning] = useState(false)
-  const [sessions, setSessions] = useState(0)
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [mode, setMode] = useState('work')
   const intervalRef = useRef(null)
-  
-  const currentState = POMODORO_STATES[mode]
-  const minutes = Math.floor(timeLeft / 60)
-  const seconds = timeLeft % 60
   
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
@@ -59,114 +54,223 @@ function PomodoroTimer({ activeTask, onComplete }) {
       }, 1000)
     } else if (timeLeft === 0) {
       setIsRunning(false)
-      handleComplete()
+      onSave(mode, minutes)
+      onClose()
     }
-    
     return () => clearInterval(intervalRef.current)
   }, [isRunning, timeLeft])
   
-  const handleComplete = () => {
-    if (mode === 'work') {
-      const newSessions = sessions + 1
-      setSessions(newSessions)
-      
-      if (newSessions % 4 === 0) {
-        setMode('longBreak')
-        setTimeLeft(POMODORO_STATES.longBreak.duration)
-      } else {
-        setMode('shortBreak')
-        setTimeLeft(POMODORO_STATES.shortBreak.duration)
-      }
-      
-      if (activeTask) {
-        onComplete(activeTask)
-      }
-    } else {
-      setMode('work')
-      setTimeLeft(POMODORO_STATES.work.duration)
-    }
-  }
+  if (!isOpen) return null
   
-  const toggleTimer = () => setIsRunning(!isRunning)
+  const currentMinutes = Math.floor(timeLeft / 60)
+  const seconds = timeLeft % 60
   
-  const resetTimer = () => {
-    setIsRunning(false)
-    setTimeLeft(currentState.duration)
-  }
-  
-  const switchMode = (newMode) => {
-    setMode(newMode)
-    setTimeLeft(POMODORO_STATES[newMode].duration)
-    setIsRunning(false)
+  const handleSave = () => {
+    onSave(mode, minutes)
+    onClose()
   }
   
   return (
-    <div className="mb-6 rounded-xl bg-zinc-900/50 border border-zinc-800 overflow-hidden">
-      <button 
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full p-3 flex items-center justify-between hover:bg-zinc-800/50 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className={`w-2 h-2 rounded-full ${currentState.bg} ${isRunning ? 'animate-pulse' : ''}`}></div>
-          <span className="text-zinc-400 text-sm font-mono">
-            {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-          </span>
-          <span className={`text-xs ${currentState.color}`}>{currentState.label}</span>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-semibold text-zinc-100">Timer</h2>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300">
+            <X size={20} />
+          </button>
         </div>
-        <ChevronDown size={16} className={`text-zinc-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-      </button>
-      
-      {isExpanded && (
-        <div className="p-4 border-t border-zinc-800">
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <button 
-              onClick={toggleTimer}
-              className={`p-3 rounded-full ${currentState.bg} text-white hover:opacity-90 transition-opacity`}
-            >
-              {isRunning ? <Pause size={20} /> : <Play size={20} />}
-            </button>
-            <button 
-              onClick={resetTimer}
-              className="p-3 rounded-full bg-zinc-800 text-zinc-400 hover:bg-zinc-700 transition-colors"
-            >
-              <RotateCcw size={20} />
-            </button>
+        
+        <div className="flex justify-center mb-6">
+          <div className="text-6xl font-mono text-zinc-100">
+            {String(currentMinutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
           </div>
-          
-          <div className="flex justify-center gap-2 mb-4">
-            {Object.entries(POMODORO_STATES).map(([key, value]) => (
-              <button
-                key={key}
-                onClick={() => switchMode(key)}
-                className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                  mode === key 
-                    ? `${value.bg} text-white` 
-                    : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
-                }`}
-              >
-                {value.label}
-              </button>
-            ))}
-          </div>
-          
-          <div className="flex justify-center items-center gap-2 text-sm">
-            <Coffee size={14} className="text-zinc-600" />
-            <span className="text-zinc-500">{sessions} sessions today</span>
-          </div>
-          
-          {activeTask && (
-            <div className="mt-3 text-center">
-              <span className="text-xs text-zinc-600">Working on: </span>
-              <span className="text-xs text-zinc-400 truncate">{activeTask.title}</span>
+        </div>
+        
+        <div className="flex justify-center gap-3 mb-6">
+          <button
+            onClick={() => { setMode('work'); setMinutes(25); setTimeLeft(25 * 60); setIsRunning(false) }}
+            className={`px-4 py-2 rounded-lg text-sm ${mode === 'work' ? 'bg-rose-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}
+          >
+            <Sun size={16} className="inline mr-1" /> Work
+          </button>
+          <button
+            onClick={() => { setMode('break'); setMinutes(5); setTimeLeft(5 * 60); setIsRunning(false) }}
+            className={`px-4 py-2 rounded-lg text-sm ${mode === 'break' ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}
+          >
+            <Coffee size={16} className="inline mr-1" /> Break
+          </button>
+          <button
+            onClick={() => { setMode('longBreak'); setMinutes(15); setTimeLeft(15 * 60); setIsRunning(false) }}
+            className={`px-4 py-2 rounded-lg text-sm ${mode === 'longBreak' ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}
+          >
+            <Moon size={16} className="inline mr-1" /> Long
+          </button>
+        </div>
+        
+        {!isRunning ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-center gap-3">
+              <label className="text-xs text-zinc-500">Minutes:</label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={minutes}
+                onChange={(e) => { 
+                  const val = parseInt(e.target.value) || 1
+                  setMinutes(Math.min(120, Math.max(1, val)))
+                  setTimeLeft(Math.min(120, Math.max(1, val)) * 60)
+                }}
+                className="w-20 bg-zinc-800 border border-zinc-700 rounded px-3 py-1 text-zinc-100 text-center"
+              />
             </div>
-          )}
-        </div>
-      )}
+            <button
+              onClick={() => setIsRunning(true)}
+              className="w-full py-3 bg-rose-500 text-white rounded-lg font-medium hover:bg-rose-600 transition-colors flex items-center justify-center gap-2"
+            >
+              <Play size={18} /> Start
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <button
+              onClick={() => setIsRunning(false)}
+              className="w-full py-3 bg-zinc-800 text-zinc-300 rounded-lg font-medium hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <Pause size={18} /> Pause
+            </button>
+            <button
+              onClick={handleSave}
+              className="w-full py-3 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-colors"
+            >
+              Save & Stop
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-function TaskCard({ task, onStatusChange, onDelete, onPriorityChange, onSelect, isSelected }) {
+function StatsModal({ isOpen, onClose, stats }) {
+  if (!isOpen || !stats) return null
+  
+  const formatTime = (mins) => {
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    if (h > 0) return `${h}h ${m}m`
+    return `${m}m`
+  }
+  
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex justify-between items-center p-4 border-b border-zinc-800">
+          <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+            <BarChart3 size={20} /> Statistics
+          </h2>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="overflow-y-auto p-4 space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-zinc-800/50 rounded-xl p-4">
+              <p className="text-xs text-zinc-500 mb-1">Total Work</p>
+              <p className="text-2xl font-bold text-rose-400">{formatTime(stats.total.workMinutes)}</p>
+            </div>
+            <div className="bg-zinc-800/50 rounded-xl p-4">
+              <p className="text-xs text-zinc-500 mb-1">Breaks</p>
+              <p className="text-2xl font-bold text-emerald-400">{formatTime(stats.total.breakMinutes + stats.total.longBreakMinutes)}</p>
+            </div>
+            <div className="bg-zinc-800/50 rounded-xl p-4">
+              <p className="text-xs text-zinc-500 mb-1">Sessions</p>
+              <p className="text-2xl font-bold text-zinc-100">{stats.total.sessions}</p>
+            </div>
+            <div className="bg-zinc-800/50 rounded-xl p-4">
+              <p className="text-xs text-zinc-500 mb-1">Tasks Done</p>
+              <p className="text-2xl font-bold text-blue-400">{stats.total.tasksCompleted}</p>
+            </div>
+          </div>
+          
+          <div>
+            <h3 className="text-sm font-medium text-zinc-300 mb-3">Today</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-zinc-800/50 rounded-lg p-3">
+                <p className="text-xs text-zinc-500">Work</p>
+                <p className="text-lg font-semibold text-rose-400">{formatTime(stats.today.workMinutes)}</p>
+              </div>
+              <div className="bg-zinc-800/50 rounded-lg p-3">
+                <p className="text-xs text-zinc-500">Breaks</p>
+                <p className="text-lg font-semibold text-emerald-400">{formatTime(stats.today.breakMinutes + stats.today.longBreakMinutes)}</p>
+              </div>
+              <div className="bg-zinc-800/50 rounded-lg p-3">
+                <p className="text-xs text-zinc-500">Sessions</p>
+                <p className="text-lg font-semibold text-zinc-100">{stats.today.sessions}</p>
+              </div>
+              <div className="bg-zinc-800/50 rounded-lg p-3">
+                <p className="text-xs text-zinc-500">Tasks</p>
+                <p className="text-lg font-semibold text-blue-400">{stats.today.tasksCompleted}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <h3 className="text-sm font-medium text-zinc-300 mb-3">Last 7 Days</h3>
+            <div className="space-y-2">
+              {stats.last7Days.map(day => (
+                <div key={day.date} className="flex items-center gap-4 bg-zinc-800/50 rounded-lg p-3">
+                  <div className="w-12 text-center">
+                    <p className="text-xs text-zinc-500">{day.dayName}</p>
+                    <p className="text-lg font-semibold text-zinc-200">{day.dayNum}</p>
+                  </div>
+                  <div className="flex-1 grid grid-cols-4 gap-2 text-center text-xs">
+                    <div>
+                      <p className="text-zinc-500">Work</p>
+                      <p className="text-rose-400 font-medium">{formatTime(day.workMinutes)}</p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-500">Breaks</p>
+                      <p className="text-emerald-400 font-medium">{formatTime(day.breakMinutes + day.longBreakMinutes)}</p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-500">Sessions</p>
+                      <p className="text-zinc-200 font-medium">{day.sessions}</p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-500">Tasks</p>
+                      <p className="text-blue-400 font-medium">{day.tasksCompleted}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {stats.taskTimeBreakdown && stats.taskTimeBreakdown.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-zinc-300 mb-3">Time per Task</h3>
+              <div className="space-y-2">
+                {stats.taskTimeBreakdown.map(task => (
+                  <div key={task.id} className="flex items-center justify-between bg-zinc-800/50 rounded-lg p-3">
+                    <span className="text-sm text-zinc-200 truncate flex-1">{task.title}</span>
+                    <div className="flex items-center gap-4 text-xs">
+                      <span className="text-zinc-500">{task.sessions} sessions</span>
+                      <span className="text-rose-400 font-medium">{formatTime(task.minutes)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TaskCard({ task, onStatusChange, onDelete, onPriorityChange, onSelect, isSelected, isWorking }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task._id })
   
   const style = {
@@ -188,8 +292,6 @@ function TaskCard({ task, onStatusChange, onDelete, onPriorityChange, onSelect, 
     high: 'text-rose-500',
   }
   
-  const isToday = task.dueDate && new Date(task.dueDate).toDateString() === new Date().toDateString()
-  
   const nextStatus = {
     pending: 'inProgress',
     inProgress: 'done',
@@ -205,9 +307,12 @@ function TaskCard({ task, onStatusChange, onDelete, onPriorityChange, onSelect, 
         flex items-center gap-3 p-3 rounded-lg border transition-all duration-200 cursor-pointer
         ${isDragging ? 'opacity-50 scale-[0.98] shadow-xl' : ''}
         ${isSelected ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'}
+        ${isWorking ? 'border-rose-500/50' : ''}
         ${task.status === 'done' ? 'opacity-60' : ''}
       `}
     >
+      {isWorking && <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-500 rounded-l"></div>}
+      
       <button 
         {...attributes} 
         {...listeners}
@@ -229,11 +334,6 @@ function TaskCard({ task, onStatusChange, onDelete, onPriorityChange, onSelect, 
           {task.title}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
-          {task.dueDate && (
-            <span className={`text-xs ${isToday ? 'text-blue-400' : 'text-zinc-500'}`}>
-              {isToday ? 'Today' : new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
-          )}
           {task.priority && (
             <span className={`text-xs ${priorityColors[task.priority]} flex items-center gap-1`}>
               <Flame size={12} />
@@ -319,7 +419,7 @@ function AddTaskForm({ onAdd }) {
   )
 }
 
-function TaskList({ tasks, onStatusChange, onDelete, onPriorityChange, onSelect, selectedTask, emptyMessage }) {
+function TaskList({ tasks, onStatusChange, onDelete, onPriorityChange, onSelect, selectedTask }) {
   const pendingTasks = tasks.filter(t => t.status === 'pending')
   const inProgressTasks = tasks.filter(t => t.status === 'inProgress')
   const doneTasks = tasks.filter(t => t.status === 'done')
@@ -327,7 +427,7 @@ function TaskList({ tasks, onStatusChange, onDelete, onPriorityChange, onSelect,
   if (tasks.length === 0) {
     return (
       <div className="text-center py-16 text-zinc-600 text-sm">
-        {emptyMessage}
+        No tasks yet. Add one above.
       </div>
     )
   }
@@ -414,6 +514,9 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
+  const [showTimer, setShowTimer] = useState(false)
+  const [showStats, setShowStats] = useState(false)
+  const [stats, setStats] = useState(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -435,9 +538,25 @@ function App() {
     }
   }
   
+  const fetchStats = async () => {
+    try {
+      const res = await fetch(`${API_URL}/stats`)
+      const data = await res.json()
+      setStats(data)
+    } catch (err) {
+      console.error('Failed to fetch stats:', err)
+    }
+  }
+  
   useEffect(() => {
     fetchTasks()
   }, [])
+  
+  useEffect(() => {
+    if (showStats) {
+      fetchStats()
+    }
+  }, [showStats])
   
   const addTask = async (taskData) => {
     try {
@@ -511,9 +630,22 @@ function App() {
     }
   }
   
-  const handlePomodoroComplete = async (task) => {
-    if (task.status === 'pending') {
-      await updateTaskStatus(task._id, 'inProgress')
+  const saveSession = async (mode, duration) => {
+    try {
+      await fetch(`${API_URL}/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: mode,
+          duration,
+          taskId: selectedTask?._id || null,
+          taskTitle: selectedTask?.title || null,
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString()
+        }),
+      })
+    } catch (err) {
+      console.error(err)
     }
   }
   
@@ -543,16 +675,48 @@ function App() {
     <div className="min-h-screen bg-zinc-950">
       <div className="max-w-lg mx-auto px-4 py-8">
         <header className="mb-6">
-          <h1 className="text-2xl font-semibold text-zinc-100">Tasks</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-semibold text-zinc-100">Tasks</h1>
+              <p className="text-sm text-zinc-500 mt-1">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+            <button 
+              onClick={() => setShowStats(true)}
+              className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-colors"
+            >
+              <BarChart3 size={20} />
+            </button>
+          </div>
         </header>
         
-        <PomodoroTimer 
-          activeTask={selectedTask} 
-          onComplete={handlePomodoroComplete} 
-        />
+        <div className="flex gap-4 mb-6">
+          <button 
+            onClick={() => setShowTimer(true)}
+            className={`flex-1 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+              selectedTask 
+                ? 'bg-rose-500 text-white hover:bg-rose-600' 
+                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+            }`}
+          >
+            <Timer size={18} />
+            {selectedTask ? 'Start Timer' : 'Select a task'}
+          </button>
+        </div>
+        
+        {selectedTask && (
+          <div className="mb-4 p-3 bg-zinc-900/50 border border-zinc-800 rounded-lg flex items-center gap-3">
+            <Target size={16} className="text-rose-400" />
+            <span className="text-sm text-zinc-300 truncate flex-1">{selectedTask.title}</span>
+            <button 
+              onClick={() => setSelectedTask(null)}
+              className="text-zinc-600 hover:text-zinc-400"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
         
         <div className="flex gap-6 mb-4 text-sm">
           <span className="text-zinc-400">{pendingCount} pending</span>
@@ -574,10 +738,21 @@ function App() {
             onPriorityChange={updateTaskPriority}
             onSelect={setSelectedTask}
             selectedTask={selectedTask}
-            emptyMessage="No tasks yet. Add one above."
           />
         </DndContext>
       </div>
+      
+      <TimerModal 
+        isOpen={showTimer} 
+        onClose={() => setShowTimer(false)} 
+        onSave={saveSession}
+      />
+      
+      <StatsModal 
+        isOpen={showStats} 
+        onClose={() => setShowStats(false)} 
+        stats={stats}
+      />
     </div>
   )
 }
