@@ -152,10 +152,34 @@ function TimerModal({ isOpen, onClose, onSave, initialDuration = 25 }) {
   )
 }
 
-function StatsModal({ isOpen, onClose, stats }) {
-  if (!isOpen || !stats) return null
+function StatsModal({ isOpen, onClose, stats, loading, error }) {
+  if (!isOpen) return null
+  
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
+          <p className="text-zinc-400">Loading statistics...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  if (error) {
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 text-center">
+          <p className="text-rose-400 mb-2">{error}</p>
+          <button onClick={onClose} className="text-zinc-400 text-sm">Close</button>
+        </div>
+      </div>
+    )
+  }
+  
+  if (!stats) return null
   
   const formatTime = (mins) => {
+    if (!mins) return '0m'
     const h = Math.floor(mins / 60)
     const m = mins % 60
     if (h > 0) return `${h}h ${m}m`
@@ -517,6 +541,8 @@ function App() {
   const [showTimer, setShowTimer] = useState(false)
   const [showStats, setShowStats] = useState(false)
   const [stats, setStats] = useState(null)
+  const [statsLoading, setStatsLoading] = useState(false)
+  const [statsError, setStatsError] = useState(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -540,11 +566,17 @@ function App() {
   
   const fetchStats = async () => {
     try {
+      setStatsLoading(true)
+      setStatsError(null)
       const res = await fetch(`${API_URL}/stats`)
+      if (!res.ok) throw new Error('Failed to fetch stats')
       const data = await res.json()
       setStats(data)
     } catch (err) {
       console.error('Failed to fetch stats:', err)
+      setStatsError(err.message)
+    } finally {
+      setStatsLoading(false)
     }
   }
   
@@ -752,6 +784,8 @@ function App() {
         isOpen={showStats} 
         onClose={() => setShowStats(false)} 
         stats={stats}
+        loading={statsLoading}
+        error={statsError}
       />
     </div>
   )
